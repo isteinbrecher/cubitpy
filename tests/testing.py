@@ -973,6 +973,13 @@ class TestCubitPy(unittest.TestCase):
         cubit.cmd("create surface circle radius 1 zplane")
         cubit.cmd("brick x 1")
 
+        print(cubit.get_ids(cupy.geometry.vertex))
+        print(cubit.get_ids(cupy.geometry.curve))
+        print(cubit.get_ids(cupy.geometry.surface))
+        print(cubit.get_ids(cupy.geometry.volume))
+
+        cubit.display_in_cubit()
+
         self.assertEqual(
             [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], cubit.get_ids(cupy.geometry.vertex)
         )

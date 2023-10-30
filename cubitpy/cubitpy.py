@@ -262,7 +262,7 @@ class CubitPy(object):
         bc_type=None,
         bc_description="NUMDOF 3 ONOFF 0 0 0 VAL 0 0 0 FUNCT 0 0 0",
         bc_section=None,
-        geometry_type=None
+        geometry_type=None,
     ):
         """
         Add a node set to cubit. This node set can have a boundary condition.
@@ -371,7 +371,8 @@ class CubitPy(object):
 
     def export_cub(self, path):
         """Export the cubit input."""
-        self.cubit.cmd('save as "{}" overwrite'.format(path))
+        self.cubit.cmd(f'save cub5 "{path}" overwrite journal')
+        # self.cubit.cmd('save as "{}" overwrite'.format(path))
 
     def export_exo(self, path):
         """Export the mesh."""
@@ -512,7 +513,7 @@ class CubitPy(object):
         # TODO: find a way to do this without the wait command, but to check if
         # the file is readable.
         os.makedirs(cupy.temp_dir, exist_ok=True)
-        state_path = os.path.join(cupy.temp_dir, "state.cub")
+        state_path = os.path.join(cupy.temp_dir, "state.cub5")
         self.export_cub(state_path)
         time.sleep(delay)
 
@@ -521,37 +522,33 @@ class CubitPy(object):
         with open(journal_path, "w") as journal:
             journal.write('open "{}"\n'.format(state_path))
 
-            # Get the cubit names of the desired display items.
-            cubit_names = [label.get_cubit_string() for label in labels]
+            # # Get the cubit names of the desired display items.
+            # cubit_names = [label.get_cubit_string() for label in labels]
 
-            # Label items in cubit, per default all labels are deactivated.
-            cubit_labels = [
-                "volume",
-                "surface",
-                "curve",
-                "vertex",
-                "hex",
-                "tet",
-                "face",
-                "tri",
-                "edge",
-                "node",
-            ]
-            for item in cubit_labels:
-                if item in cubit_names:
-                    on_off = "On"
-                else:
-                    on_off = "Off"
-                journal.write("label {} {}\n".format(item, on_off))
-            journal.write("display\n")
+            # # Label items in cubit, per default all labels are deactivated.
+            # cubit_labels = [
+            #     "volume",
+            #     "surface",
+            #     "curve",
+            #     "vertex",
+            #     "hex",
+            #     "tet",
+            #     "face",
+            #     "tri",
+            #     "edge",
+            #     "node",
+            # ]
+            # for item in cubit_labels:
+            #     if item in cubit_names:
+            #         on_off = "On"
+            #     else:
+            #         on_off = "Off"
+            #     journal.write("label {} {}\n".format(item, on_off))
+            # journal.write("display\n")
 
         # Get the command and arguments to open cubit with.
         cubit_command = [
             os.path.join(self.cubit_path, "bin", "coreform_cubit"),
-            "-nojournal",
-            "-information",
-            "Off",
-            "-input",
             "open_state.jou",
         ]
 
