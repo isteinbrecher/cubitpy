@@ -55,7 +55,8 @@ class CubitConnect(object):
     def __init__(
         self,
         cubit_arguments,
-        interpreter="popen//python=python2.7",
+        #interpreter="popen//python=/home/ivo/opt/cubit-2023/bin/python3/python3",
+        interpreter="popen//python=python3",
         cubit_bin_path=None,
     ):
         """

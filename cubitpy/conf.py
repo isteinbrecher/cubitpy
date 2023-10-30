@@ -82,7 +82,7 @@ class CubitOptions(object):
         """Look for and return a path to cubit or pre_exodus."""
 
         if name == "cubit":
-            environment_variable = "CUBIT"
+            environment_variable = "CUBIT2023"
             test_function = os.path.isdir
         elif name == "pre_exodus":
             environment_variable = "BACI_PRE_EXODUS"

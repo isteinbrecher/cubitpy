@@ -547,7 +547,7 @@ class CubitPy(object):
 
         # Get the command and arguments to open cubit with.
         cubit_command = [
-            os.path.join(self.cubit_path, "cubit"),
+            os.path.join(self.cubit_path, "bin", "coreform_cubit"),
             "-nojournal",
             "-information",
             "Off",
