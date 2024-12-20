@@ -937,9 +937,17 @@ def test_point_coupling():
     # Check each node with each other node. If they are at the same
     # position, add a coupling.
     surf = surfaces.get_geometry_objects(cupy.geometry.surface)
-    for node_id_1 in get_node_ids(cubit, surf[0]):
+
+    # Sort the node IDs, by doing so the results are independent of the ordering
+    # of the node IDs returned by cubit (which can change between versions).
+    node_ids_1 = get_node_ids(cubit, surf[0])
+    node_ids_1.sort()
+    node_ids_2 = get_node_ids(cubit, surf[1])
+    node_ids_2.sort()
+
+    for node_id_1 in node_ids_1:
         coordinates_1 = np.array(cubit.get_nodal_coordinates(node_id_1))
-        for node_id_2 in get_node_ids(cubit, surf[1]):
+        for node_id_2 in node_ids_2:
             coordinates_2 = cubit.get_nodal_coordinates(node_id_2)
             if np.linalg.norm(coordinates_2 - coordinates_1) < cupy.eps_pos:
                 cubit.add_node_set(
