@@ -1367,8 +1367,12 @@ def test_display_in_cubit():
     )
     with open(journal_path, "r") as journal:
         journal_text = journal.read()
+    if cupy.is_coreform():
+        state_name = "state.cub5"
+    else:
+        state_name = "state.cub"
     ref_text = (
-        'open "{}/state.cub"\n'
+        f'open "{cupy.temp_dir}/{state_name}"\n'
         "label volume On\n"
         "label surface On\n"
         "label curve On\n"
@@ -1380,7 +1384,7 @@ def test_display_in_cubit():
         "label edge On\n"
         "label node On\n"
         "display"
-    ).format(cupy.temp_dir)
+    )
     assert journal_text.strip() == ref_text.strip()
 
 
