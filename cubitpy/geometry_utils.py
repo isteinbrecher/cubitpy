@@ -48,3 +48,30 @@ def import_fluent_geometry(cubit, file, feature_angle=135):
             file, feature_angle
         )
     )
+
+
+def get_geometry_type(item):
+    """Return the type of this item."""
+
+    item_type = str(type(item))
+
+    if "Vertex" in item_type:
+        return cupy.geometry.vertex
+    elif "Curve" in item_type:
+        return cupy.geometry.curve
+    elif "Surface" in item_type:
+        return cupy.geometry.surface
+    elif "Volume" in item_type:
+        return cupy.geometry.volume
+
+    # if self.isinstance("cubitpy_vertex"):
+    #     return cupy.geometry.vertex
+    # elif self.isinstance("cubitpy_curve"):
+    #     return cupy.geometry.curve
+    # elif self.isinstance("cubitpy_surface"):
+    #     return cupy.geometry.surface
+    # elif self.isinstance("cubitpy_volume"):
+    #     return cupy.geometry.volume
+
+    # # Default value -> not a valid geometry
+    raise TypeError("The item is not a valid geometry!")

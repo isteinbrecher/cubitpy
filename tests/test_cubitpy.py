@@ -23,6 +23,9 @@
 
 import os
 import subprocess
+import sys
+
+sys.path.append("/Applications/Coreform-Cubit-2024.3.app/Contents/lib")
 
 import numpy as np
 import pytest

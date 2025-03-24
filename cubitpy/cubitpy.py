@@ -21,10 +21,16 @@
 # THE SOFTWARE.
 """Implements a class that helps create meshes with cubit."""
 
+import sys
+
+sys.path.append("/Applications/Coreform-Cubit-2024.3.app/Contents/lib")
+
 import os
 import subprocess  # nosec B404
 import time
 import warnings
+
+import cubit
 
 from cubitpy.conf import cupy
 from cubitpy.cubit_group import CubitGroup
@@ -54,7 +60,7 @@ class CubitPy(object):
         self.cubit_exe = cubit_exe
 
         # Set the "real" cubit object
-        self.cubit = CubitConnect(**kwargs).cubit
+        self.cubit = cubit
 
         # Reset cubit
         self.cubit.cmd("reset")
