@@ -128,6 +128,12 @@ class CubitGroup(object):
                 add_value.id(),
                 get_geometry_type(add_value).get_cubit_string(),
             )
+        elif "cubit3" in str(type(add_value)):
+            self.cubit.add_entity_to_group(
+                self._id,
+                add_value.id(),
+                get_geometry_type(add_value).get_cubit_string(),
+            )
         elif isinstance(add_value, list):
             for item in add_value:
                 self.add(item)
