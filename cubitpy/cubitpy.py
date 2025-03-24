@@ -21,16 +21,10 @@
 # THE SOFTWARE.
 """Implements a class that helps create meshes with cubit."""
 
-import sys
-
-sys.path.append("/Applications/Coreform-Cubit-2024.3.app/Contents/lib")
-
 import os
 import subprocess  # nosec B404
 import time
 import warnings
-
-import cubit
 
 from cubitpy.conf import cupy
 from cubitpy.cubit_group import CubitGroup
@@ -42,25 +36,54 @@ from cubitpy.utils import get_geometry_type
 class CubitPy(object):
     """A wrapper class with additional functionality for cubit."""
 
-    def __init__(self, *, cubit_exe=None, **kwargs):
+    def __init__(
+        self, *, cubit_exe=None, cubit_args=None, force_native_cubit=False, **kwargs
+    ):
         """Initialize CubitPy.
 
         Args
         ----
         cubit_exe: str
             Path to the cubit executable
+        cubit_args: [str]
+            List of arguments to pass to cubit.init
 
         kwargs:
             Arguments passed on to the creation of the python wrapper
         """
+
+        force_native_cubit = True
 
         # Set paths
         if cubit_exe is None:
             cubit_exe = cupy.get_cubit_exe_path()
         self.cubit_exe = cubit_exe
 
-        # Set the "real" cubit object
-        self.cubit = cubit
+        # Arguments for cubit
+        native = False
+        if cubit_args is None:
+            cubit_args = [
+                "cubit",
+                # "-log",  # Write the log to a file
+                # "dev/null",
+                "-information",  # Do not output information of cubit
+                "Off",
+                "-nojournal",  # Do write a journal file
+                "-noecho",  # Do not output commands used in cubit
+            ]
+        else:
+            cubit_args = ["cubit"] + cubit_args
+
+        try:
+            import cubit
+        except:
+            if force_native_cubit:
+                raise ModuleNotFoundError("Could not load the native cubit module")
+            self.cubit = CubitConnect(cubit_args, **kwargs).cubit
+        else:
+            self.cubit = cubit
+            self.cubit.init(cubit_args)
+            self.native = True
 
         # Reset cubit
         self.cubit.cmd("reset")
@@ -80,6 +103,12 @@ class CubitPy(object):
     def __getattr__(self, key, *args, **kwargs):
         """All calls to methods and attributes that are not in this object get
         passed to cubit."""
+
+        # TODO -> Fix this so we dont get a segmentation fault if the key does not exist for the native case
+        print()
+        print(key)
+        print(args)
+        print(kwargs)
         return self.cubit.__getattribute__(key, *args, **kwargs)
 
     def _name_created_set(self, set_type, set_id, name, item):
@@ -276,10 +305,6 @@ class CubitPy(object):
             bc_section = bc_type.get_dat_bc_section_header(geometry_type)
         self.node_sets.append([bc_section, bc_description, geometry_type])
 
-    def get_ids(self, geometry_type):
-        """Get a list with all available ids of a certain geometry type."""
-        return self.get_entities(geometry_type.get_cubit_string())
-
     def get_items(self, geometry_type, item_ids=None):
         """Get a list with all available cubit objects of a certain geometry
         type."""
@@ -296,7 +321,7 @@ class CubitPy(object):
             raise ValueError("Got unexpected geometry type!")
 
         if item_ids is None:
-            item_ids = self.get_ids(geometry_type)
+            item_ids = get_ids(self, geometry_type)
         return [funct(index) for index in item_ids]
 
     def set_line_interval(self, item, n_el):

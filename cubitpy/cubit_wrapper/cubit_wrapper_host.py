@@ -42,8 +42,8 @@ class CubitConnect(object):
 
     def __init__(
         self,
+        cubit_args,
         *,
-        cubit_args=None,
         cubit_lib=None,
         interpreter=None,
     ):
@@ -89,22 +89,8 @@ class CubitConnect(object):
         parameters["__file__"] = __file__
         parameters["cubit_lib_path"] = cubit_lib
 
-        # Arguments for cubit
-        if cubit_args is None:
-            arguments = [
-                "cubit",
-                # "-log",  # Write the log to a file
-                # "dev/null",
-                "-information",  # Do not output information of cubit
-                "Off",
-                "-nojournal",  # Do write a journal file
-                "-noecho",  # Do not output commands used in cubit
-            ]
-        else:
-            arguments = ["cubit"] + cubit_args
-
         # Check if a log file was given in the cubit arguments
-        for arg in arguments:
+        for arg in cubit_args:
             if arg.startswith("-log="):
                 log_given = True
                 break
@@ -115,7 +101,7 @@ class CubitConnect(object):
 
         if not log_given:
             # Write the log to a temporary file and check the contents after each call to cubit
-            arguments.extend(["-log", cupy.temp_log])
+            cubit_args.extend(["-log", cupy.temp_log])
             parameters["tty"] = cupy.temp_log
             self.log_check = True
 
@@ -123,7 +109,7 @@ class CubitConnect(object):
         self.send_and_return(parameters)
 
         # Initialize cubit in the client and create the linking object here
-        cubit_id = self.send_and_return(["init", arguments])
+        cubit_id = self.send_and_return(["init", cubit_args])
         self.cubit = CubitObjectMain(self, cubit_id)
 
         def cleanup_execnet_gateway():
@@ -324,6 +310,50 @@ class CubitObject(object):
     def get_attributes(self):
         """Return a list of all non callable cubit methods for this object."""
         return [method for method, callable in self.get_self_dir() if not callable]
+
+    def get_geometry_type(self):
+        """Return the type of this item."""
+
+        if self.isinstance("cubitpy_vertex"):
+            return cupy.geometry.vertex
+        elif self.isinstance("cubitpy_curve"):
+            return cupy.geometry.curve
+        elif self.isinstance("cubitpy_surface"):
+            return cupy.geometry.surface
+        elif self.isinstance("cubitpy_volume"):
+            return cupy.geometry.volume
+
+        # Default value -> not a valid geometry
+        raise TypeError("The item is not a valid geometry!")
+
+    def get_node_ids(self):
+        """Return a list with the node IDs (index 1) of this object.
+
+        This is done by creating a temporary node set that this geometry
+        is added to. It is not possible to get the node list directly
+        from cubit.
+        """
+
+        # Get a node set ID that is not yet taken
+        node_set_ids = [0]
+        node_set_ids.extend(self.cubit_connect.cubit.get_nodeset_id_list())
+        temp_node_set_id = max(node_set_ids) + 1
+
+        # Add a temporary node set with this geometry
+        self.cubit_connect.cubit.cmd(
+            "nodeset {} {} {}".format(
+                temp_node_set_id, self.get_geometry_type().get_cubit_string(), self.id()
+            )
+        )
+
+        # Get the nodes in the created node set
+        node_ids = self.cubit_connect.cubit.get_nodeset_nodes_inclusive(
+            temp_node_set_id
+        )
+
+        # Delete the temp node set and return the node list
+        self.cubit_connect.cubit.cmd("delete nodeset {}".format(temp_node_set_id))
+        return node_ids
 
 
 class CubitObjectMain(CubitObject):

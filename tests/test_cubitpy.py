@@ -1241,11 +1241,11 @@ def test_get_id_functions():
     cubit.cmd("create surface circle radius 1 zplane")
     cubit.cmd("brick x 1")
 
-    assert [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] == cubit.get_ids(
-        cupy.geometry.vertex
+    assert [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] == get_ids(
+        cubit, cupy.geometry.vertex
     )
-    assert [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] == cubit.get_ids(
-        cupy.geometry.curve
+    assert [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] == get_ids(
+        cubit, cupy.geometry.curve
     )
     assert [1, 2, 3, 4, 5, 6, 7] == cubit.get_ids(cupy.geometry.surface)
     if cupy.is_coreform():
