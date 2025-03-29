@@ -22,6 +22,7 @@
 """Utility functions for the use of cubitpy."""
 
 from cubitpy.conf import cupy
+from cubitpy.cubit_wrapper.cubit_wrapper_host import CubitObject
 
 
 def get_geometry_type(item):
@@ -32,7 +33,7 @@ def get_geometry_type(item):
 
     if isinstance(item, CubitGroup):
         return item.get_geometry_type()
-    else:
+    elif isinstance(item, CubitObject):
         if item.isinstance("cubitpy_vertex"):
             return cupy.geometry.vertex
         elif item.isinstance("cubitpy_curve"):
@@ -40,6 +41,16 @@ def get_geometry_type(item):
         elif item.isinstance("cubitpy_surface"):
             return cupy.geometry.surface
         elif item.isinstance("cubitpy_volume"):
+            return cupy.geometry.volume
+    else:
+        item_type = str(type(item))
+        if "Vertex" in item_type:
+            return cupy.geometry.vertex
+        elif "Curve" in item_type:
+            return cupy.geometry.curve
+        elif "Surface" in item_type:
+            return cupy.geometry.surface
+        elif "Volume" in item_type:
             return cupy.geometry.volume
 
     # Default value -> not a valid geometry
