@@ -57,6 +57,11 @@ def get_geometry_type(item):
     raise TypeError("The item is not a valid geometry!")
 
 
+def get_ids(cubit, geometry_type):
+    """Get a list with all available ids of a certain geometry type."""
+    return list(cubit.get_entities(geometry_type.get_cubit_string()))
+
+
 def get_node_ids(cubit, item):
     """Return a list with the node IDs (index 1) of this object.
 
@@ -82,4 +87,9 @@ def get_node_ids(cubit, item):
 
     # Delete the temp node set and return the node list
     cubit.cmd("delete nodeset {}".format(temp_node_set_id))
-    return node_ids
+    return list(node_ids)
+
+
+def get_last_id(cubit, geometry_type):
+    """because we cant convert the cubit pbject so strings - maybe to that?"""
+    return cubit.get_last_id(geometry_type.get_cubit_string())

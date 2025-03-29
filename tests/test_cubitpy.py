@@ -45,7 +45,7 @@ from cubitpy.geometry_creation_functions import (
 )
 from cubitpy.geometry_utils import get_surface_center, import_fluent_geometry
 from cubitpy.mesh_creation_functions import create_brick, extrude_mesh_normal_to_surface
-from cubitpy.utils import get_node_ids
+from cubitpy.utils import get_ids, get_last_id, get_node_ids
 
 # Global variable if this test is run by GitLab.
 if "TESTING_GITHUB" in os.environ.keys() and os.environ["TESTING_GITHUB"] == "1":
@@ -1247,13 +1247,13 @@ def test_get_id_functions():
     assert [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] == get_ids(
         cubit, cupy.geometry.curve
     )
-    assert [1, 2, 3, 4, 5, 6, 7] == cubit.get_ids(cupy.geometry.surface)
+    assert [1, 2, 3, 4, 5, 6, 7] == get_ids(cubit, cupy.geometry.surface)
     if cupy.is_coreform():
         ref_ids = [1, 2]
-        assert [1, 2] == cubit.get_ids(cupy.geometry.volume)
+        assert [1, 2] == get_ids(cubit, cupy.geometry.volume)
     else:
         ref_ids = [2]
-    assert ref_ids == cubit.get_ids(cupy.geometry.volume)
+    assert ref_ids == get_ids(cubit, cupy.geometry.volume)
 
 
 def test_get_node_id_function():
@@ -1304,14 +1304,18 @@ def test_serialize_geometry_types():
 
     cubit.cmd("create vertex -1 -1 -1")
     cubit.cmd("create vertex 1 2 3")
-    geo_id = cubit.get_last_id(cupy.geometry.vertex)
-    bounding_box = cubit.get_bounding_box(cupy.geometry.vertex, geo_id)
+    geo_id = get_last_id(cubit, cupy.geometry.vertex)
+    bounding_box = cubit.get_bounding_box(
+        cupy.geometry.vertex.get_cubit_string(), geo_id
+    )
     bounding_box_ref = np.array([1.0, 1.0, 0.0, 2.0, 2.0, 0.0, 3.0, 3.0, 0.0, 0.0])
     assert 0.0 == pytest.approx(np.linalg.norm(bounding_box - bounding_box_ref), 1e-10)
 
     cubit.cmd("create curve vertex 1 2")
-    geo_id = cubit.get_last_id(cupy.geometry.curve)
-    bounding_box = cubit.get_bounding_box(cupy.geometry.curve, geo_id)
+    geo_id = cubit.get_last_id(cupy.geometry.curve.get_cubit_string())
+    bounding_box = cubit.get_bounding_box(
+        cupy.geometry.curve.get_cubit_string(), geo_id
+    )
     bounding_box_ref = np.array(
         [-1.0, 1.0, 2.0, -1.0, 2.0, 3.0, -1.0, 3.0, 4.0, 5.385164807134504]
     )

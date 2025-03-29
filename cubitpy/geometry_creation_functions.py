@@ -21,6 +21,8 @@
 # THE SOFTWARE.
 """Implements functions that create geometries in cubit."""
 
+from cubitpy.utils import get_last_id
+
 from . import cupy
 
 
@@ -45,7 +47,7 @@ def create_spline_interpolation_curve(cubit, vertices, *, delete_points=True):
             " ".join(vertices_ids), ("delete" if delete_points else "")
         )
     )
-    return cubit.curve(cubit.get_last_id(cupy.geometry.curve))
+    return cubit.curve(get_last_id(cubit, cupy.geometry.curve))
 
 
 def create_parametric_curve(
@@ -170,7 +172,7 @@ def create_parametric_surface(
         for id_string in [curve_u_ids, curve_v_ids]:
             cubit.cmd("delete curve {}".format(id_string))
 
-    return cubit.surface(cubit.get_last_id(cupy.geometry.surface))
+    return cubit.surface(get_last_id(cubit, cupy.geometry.surface))
 
 
 def create_surface_by_vertices(cubit, vertices):

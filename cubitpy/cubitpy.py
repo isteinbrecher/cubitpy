@@ -105,10 +105,10 @@ class CubitPy(object):
         passed to cubit."""
 
         # TODO -> Fix this so we dont get a segmentation fault if the key does not exist for the native case
-        print()
-        print(key)
-        print(args)
-        print(kwargs)
+        # print()
+        # print(key)
+        # print(args)
+        # print(kwargs)
         return self.cubit.__getattribute__(key, *args, **kwargs)
 
     def _name_created_set(self, set_type, set_id, name, item):

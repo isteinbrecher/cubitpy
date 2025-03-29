@@ -272,5 +272,5 @@ def extrude_mesh_normal_to_surface(
             " ".join(map(str, ball_hex_ids))
         )
     )
-    last_id = cubit.get_entities(cupy.geometry.volume)[-1]
+    last_id = cubit.get_entities(cupy.geometry.volume.get_cubit_string())[-1]
     return cubit.volume(last_id)

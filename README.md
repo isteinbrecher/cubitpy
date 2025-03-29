@@ -77,3 +77,7 @@ If you intend to actively develop CubitPy, please make sure to install the `pre-
 ```bash
 pre-commit install
 ```
+
+
+
+TODO: see if the get_last_id calls can be improved
