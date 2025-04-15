@@ -19,3 +19,4 @@ test.py
 
 # .github should not be ignored
 !.github
+test-env

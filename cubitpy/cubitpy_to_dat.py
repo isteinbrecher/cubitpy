@@ -102,7 +102,7 @@ def add_node_sets(dat_lines, cubit, exo):
             for i_set, node_set in enumerate(node_sets[geo]):
                 node_set.sort()
                 for i_node in node_set:
-                    dat_lines.append(f"NODE {i_node:6d} {set_label} {i_set+1}")
+                    dat_lines.append(f"NODE {i_node:6d} {set_label} {i_set + 1}")
 
 
 def get_element_connectivity_string(connectivity):
@@ -158,9 +158,11 @@ def cubit_to_dat(cubit):
     cubit.export_exo(exo_path)
     exo = netCDF4.Dataset(exo_path)
 
-    dat_lines = []
+    data = {}
+    dat_lines = []  # To remove
 
     # Add the header
+    data = data | cubit.head
     for line in cubit.head.split("\n"):
         dat_lines.append(line.strip())
 
@@ -168,6 +170,7 @@ def cubit_to_dat(cubit):
     add_node_sets(dat_lines, cubit, exo)
 
     # Add the nodal data
+    node_list = []
     dat_lines.append(
         "-------------------------------------------------------NODE COORDS"
     )
@@ -180,9 +183,10 @@ def cubit_to_dat(cubit):
         temp.append([0 for i in range(len(temp[0]))])
         coordinates = np.array(temp).transpose()
     for i, coordinate in enumerate(coordinates):
-        dat_lines.append(
-            f"NODE {i+1:9d} COORD {coordinate[0]: .16e} {coordinate[1]: .16e} {coordinate[2]: .16e}"
+        node_list.append(
+            f"NODE {i + 1:9d} COORD {coordinate[0]: .16e} {coordinate[1]: .16e} {coordinate[2]: .16e}"
         )
+    data["NODE COORDS"] = node_list
 
     # Add the element connectivity
     current_section = None
@@ -192,16 +196,27 @@ def cubit_to_dat(cubit):
     for i_block, key in enumerate(connectivity_keys):
         ele_type, block_string = cubit.blocks[i_block]
         block_section = ele_type.get_four_c_section()
-        if not block_section == current_section:
-            current_section = block_section
-            dat_lines.append(
-                f"------------------------------------------------{current_section} ELEMENTS"
-            )
+        element_list = []
         for connectivity in exo.variables[key][:]:
             connectivity_string = get_element_connectivity_string(connectivity)
-            dat_lines.append(
-                f"{i_element+1:9d} {ele_type.get_four_c_name()} {ele_type.get_four_c_type()} {connectivity_string} {block_string}"
+            element_list.append(
+                f"{i_element + 1:9d} {ele_type.get_four_c_name()} {ele_type.get_four_c_type()} {connectivity_string} {block_string}"
             )
             i_element += 1
+        if not block_section == current_section:
+            current_section = block_section
+
+            data[f"{current_section} ELEMENTS"] = element_list
 
     return dat_lines
+
+
+def write_input_file(cubit):
+    dict = cubit_to_dat()
+    with open(file_path, "w") as input_file:
+        _yaml.dump(
+            self.get_dict_to_dump(**kwargs),
+            input_file,
+            Dumper=_MeshPyDumper,
+            width=float("inf"),
+        )
