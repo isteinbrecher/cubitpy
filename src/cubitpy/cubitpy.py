@@ -52,6 +52,7 @@ class CubitPy(object):
         # Set paths
         if cubit_exe is None:
             cubit_exe = cupy.get_cubit_exe_path()
+        print(f"cubit_exe: {cubit_exe}")
         self.cubit_exe = cubit_exe
 
         # Set the "real" cubit object

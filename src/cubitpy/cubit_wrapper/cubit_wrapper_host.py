@@ -67,8 +67,12 @@ class CubitConnect(object):
         if interpreter is None:
             interpreter = f"popen//python={cupy.get_cubit_interpreter()}"
 
+        print(f"interpreter: {interpreter}")
+
         if cubit_lib is None:
             cubit_lib = cupy.get_cubit_lib_path()
+
+        print(f"cubit_lib: {cubit_lib}")
 
         # Set up the client python interpreter
         self.gw = execnet.makegateway(interpreter)
