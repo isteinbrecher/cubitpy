@@ -172,11 +172,7 @@ class CubitConnect(object):
             def serialize_item(item):
                 """Serialize an item, also nested lists."""
 
-                if (
-                    isinstance(item, tuple)
-                    or isinstance(item, list)
-                    or isinstance(item, np.ndarray)
-                ):
+                if isinstance(item, tuple) or isinstance(item, list):
                     arguments = []
                     for sub_item in item:
                         arguments.append(serialize_item(sub_item))
@@ -189,6 +185,8 @@ class CubitConnect(object):
                     return int(item)
                 elif isinstance(item, cupy.geometry):
                     return item.get_cubit_string()
+                elif isinstance(item, np.ndarray):
+                    return item.tolist()
                 else:
                     return item
 
