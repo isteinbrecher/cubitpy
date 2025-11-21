@@ -94,6 +94,7 @@ class CubitPy(object):
         self.blocks = {}
         self.node_sets = {}
         self.fourc_input = FourCInput()
+        self.fourc_input.type_converter.register_numpy_types()
 
     def __getattr__(self, key, *args, **kwargs):
         """All calls to methods and attributes that are not in this object get

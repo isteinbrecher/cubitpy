@@ -2072,3 +2072,51 @@ def test_cmd_return():
     assert [item.id() for item in sweep_geometry[cupy.geometry.curve]] == [3, 4, 5, 6]
     assert [item.id() for item in sweep_geometry[cupy.geometry.surface]] == [2, 3, 4]
     assert [item.id() for item in sweep_geometry[cupy.geometry.volume]] == [1]
+
+
+def test_dump_numpy_array():
+    """Check that numpy arrays can be used for boundary conditions."""
+
+    cubit = CubitPy()
+    block = create_brick(cubit, 1, 2, 3, mesh_interval=[1, 1, 1])
+
+    # Add boundary condition with numpy values
+    cubit.add_node_set(
+        block.surfaces()[0],
+        bc_section="DESIGN SURF DIRICH CONDITIONS",
+        bc_description={
+            "NUMDOF": 6,
+            "ONOFF": [1, 1, 1, 0, 0, 0],
+            "VAL": np.linspace(0.0, 10.0, 6),
+            "FUNCT": np.zeros(6, dtype=int),
+        },
+    )
+
+    compare_yaml(cubit)
+
+
+def test_cubit_pass_array():
+    """Check that different array types can be passed to cubit objects."""
+
+    cubit = CubitPy()
+    block = create_brick(cubit, 1, 2, 3, mesh_interval=[1, 1, 1])
+
+    point_and_result = [
+        ([1.0, 2.0, 3.0], False),
+        ([0.0, 0.0, 0.0], True),
+        ([0.4, 0.8, 1.4], True),
+        #
+        ([1, 2, 3], False),
+        ([0, 0, 0], True),
+        #
+        (np.array([1.0, 2.0, 3.0]), False),
+        (np.array([0.0, 0.0, 0.0]), True),
+        (np.array([0.4, 0.8, 1.4]), True),
+        #
+        (np.array([1, 2, 3], dtype=int), False),
+        (np.array([0, 0, 0], dtype=int), True),
+    ]
+
+    for point, result in point_and_result:
+        is_inside = block.point_containment(point)
+        assert is_inside == result
