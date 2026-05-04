@@ -52,10 +52,7 @@ def get_exo_info(exo, entry_type) -> tuple[dict, dict]:
     # List of explicitly given names
     names = []
     for line in exo.variables[exo_identifier + "_names"]:
-        name: str | None = ""
-        for char in line:
-            if isinstance(char, np.bytes_):
-                name += char.decode("UTF-8")
+        name: str | None = str(netCDF4.chartostring(line))
         if name == "":
             name = None
         names.append(name)
