@@ -411,6 +411,12 @@ class CubitPy(object):
                     name=name_from_info,
                 )
                 self.cubit.cmd('nodeset {} name "{}"'.format(node_set_id, new_name))
+                if name_from_cubit == "Nodeset":
+                    # Cubit names the node sets "Nodeset" by default, this leads to the issue
+                    # that we can not set the original name again since cubit does not allow
+                    # the user to set duplicate node set names. To circumvent this issue, we
+                    # add the node set ID to the default name.
+                    name_from_cubit = f"Nodeset {node_set_id}"
                 rename_mapping[node_set_id] = name_from_cubit
 
         self.cubit.cmd('export mesh "{}" dimension 3 overwrite'.format(path))
