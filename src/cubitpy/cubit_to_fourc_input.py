@@ -49,6 +49,9 @@ def get_exo_info(exo, entry_type) -> tuple[dict, dict]:
     else:
         raise ValueError(f"Invalid entry type: {entry_type}")
 
+    if exo_identifier + "_names" not in exo.variables.keys():
+        return {}, {}
+
     # List of explicitly given names
     names = []
     for line in exo.variables[exo_identifier + "_names"]:
