@@ -31,6 +31,9 @@ sent. If cubit creates a cubit object it is saved in a dictionary in
 this script, with the key being the id of the object. The host
 interpreter only knows the id of this object and can pass it to this
 script to call a function on it or use it as an argument.
+
+Note: The contents of `cubit_wrapper_utility.py` will be added to the start
+    of this file during the setup of the remote process.
 """
 
 import os
@@ -96,13 +99,12 @@ if not isinstance(parameters, dict):
         )
     )
 
-# Add paths to sys and load utility functions and cubit
-dir_name = os.path.dirname(parameters["__file__"])
-sys.path.append(dir_name)
-sys.path.append(parameters["cubit_lib_path"])
+# Add paths to cubit libs to sys, so cubit can be imported.
+for path in parameters["additional_sys_paths"]:
+    if path not in sys.path:
+        sys.path.append(path)
 
 import cubit
-from cubit_wrapper_utility import cubit_item_to_id, is_base_type, object_to_id
 
 # The second call is the initialization call for cubit
 # init = ['init', cubit_path, [args]]
@@ -114,6 +116,16 @@ if not len(init) == 2:
 cubit.init(init[1])
 cubit_objects[id(cubit)] = cubit
 channel.send(object_to_id(cubit))
+
+
+if parameters["is_remote"]:
+    import platform
+    import subprocess  # nosec B404
+    import tempfile
+    import time
+
+    # On remote systems, create a temporary directory.
+    temp_dir = tempfile.TemporaryDirectory(prefix="cubitpy_temp_dir")
 
 
 # Now start an endless loop (until None is sent) and perform the cubit functions
@@ -133,6 +145,8 @@ while 1:
     # 'isinstance': Check if the cubit object is of a certain instance
     # 'get_self_dir': Return the attributes in a cubit_object
     # 'delete': Delete the cubit object from the dictionary
+    # 'get_temp_dir': Get the temporary directory that is accessible by Cubit.
+    # 'display_in_cubit': Launch cubit in the GUI.
 
     if cubit_item_to_id(receive[0]) is not None:
         # The first item is an id for a cubit object. Return an attribute of
@@ -245,9 +259,86 @@ while 1:
         # Return to python host
         channel.send(None)
 
+    elif receive[0] == "get_temp_dir":
+        channel.send(temp_dir.name)
+
+    elif receive[0] == "display_in_cubit":
+        # receive = ["display_in_cubit", parameters]
+        parameters = receive[1]
+
+        # Launch cubit in the GUI (for Windows remote systems). This is done by
+        # creating a journal file which specifies the view options and then cubit is
+        # run using this journal file.
+        # The launch is done using the Windows task scheduler, which allows to run the
+        # GUI app from a non-GUI process. The script waits until the task is finished,
+        # i.e., cubit is closed.
+        if not platform.system() == "Windows":
+            raise NotImplementedError(
+                "Launching the GUI is only implemented for Windows remote systems! "
+                '"Got platform "{}".'.format(platform.system())
+            )
+
+        # Write file that opens the state in cubit.
+        with open(parameters["journal_path"], "w") as journal:
+            journal.write(parameters["journal_text"])
+
+        # Get the command and arguments to open cubit with.
+        cubit_command = parameters["cubit_command"]
+
+        # Delete the task if it already exists
+        task = "RunCubit"
+        subprocess.run(  # nosec
+            ["schtasks", "/Delete", "/TN", task, "/F"], check=False
+        )
+
+        # Create the task to run the GUI app
+        subprocess.run(  # nosec
+            [
+                "schtasks",
+                "/Create",
+                "/TN",
+                task,
+                "/TR",
+                cubit_command,
+                "/SC",
+                "ONCE",
+                "/ST",
+                "23:59",
+                "/RL",
+                "LIMITED",
+                "/IT",
+            ],
+            check=True,
+        )
+
+        # Launch the task
+        subprocess.run(  # nosec
+            ["schtasks", "/Run", "/TN", task], check=True
+        )
+
+        # Wait for the task to complete by checking its status
+        while True:
+            r = subprocess.run(  # nosec
+                [
+                    "powershell",
+                    "-Command",
+                    "(Get-ScheduledTask -TaskName '{}').State".format(task),
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            if r.stdout.strip() == "Ready":
+                break
+
+            time.sleep(2)
+        channel.send(None)
+
     else:
         raise ValueError('The case of "{}" is not implemented!'.format(receive[0]))
 
+if parameters["is_remote"]:
+    temp_dir.cleanup()
 
 # Send EOF
 channel.send("EOF")

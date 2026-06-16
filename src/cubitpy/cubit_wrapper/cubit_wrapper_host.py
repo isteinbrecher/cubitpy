@@ -24,6 +24,7 @@ interpreter and the main python interpreter."""
 
 import atexit
 import os
+from pathlib import Path
 
 import execnet
 import numpy as np
@@ -40,13 +41,7 @@ class CubitConnect(object):
     receive the output.
     """
 
-    def __init__(
-        self,
-        *,
-        cubit_args=None,
-        cubit_lib=None,
-        interpreter=None,
-    ):
+    def __init__(self, *, cubit_args=None):
         """Initialize the connection between the client (cubit) python
         interpreter and this one. Also load the cubit module in the remote
         interpreter.
@@ -55,60 +50,60 @@ class CubitConnect(object):
         ----
         cubit_args: [str]
             List of arguments to pass to cubit.init
-        cubit_lib: str
-            Path to the directory containing the cubit python library.
-                - For Linux systems this is the path where the `cubit`
-                script is located (`bin` should be a subfolder of this path).
-                - For MacOS this is the `.../Cubit.app/Contents/MacOS`) folder.
         interpreter: str
             Python interpreter to be used for running cubit.
         """
 
-        # Remote mode – run cubit on a remote machine via SSH
+        # Set up the gateway to the client python interpreter
         if cupy.is_remote():
-            raise NotImplementedError("Remote cubit mode is not yet implemented.")
+            interpreter = f"ssh={cupy.get_remote_user()}@{cupy.get_remote_host()}//python={cupy.get_cubit_python_interpreter()}"
+        else:
+            interpreter = f"popen//python={cupy.get_cubit_python_interpreter()}"
+
+        # Get the path where the cubit python libs are located.
+        cubit_lib = cupy.get_cubit_lib_path()
+
+        # Set up the client python interpreter
+        self.gw = execnet.makegateway(interpreter)
+        self.gw.reconfigure(py3str_as_py2str=True)
+
+        # Get the code to be executed in the client interpreter. This code also has to
+        # contain the utility functions.
+        path_client_utils = Path(__file__).parent / "cubit_wrapper_utility.py"
+        path_client_code = Path(__file__).parent / "cubit_wrapper_client.py"
+        client_code = (
+            path_client_utils.read_text() + "\n" + path_client_code.read_text()
+        )
+
+        # Set up the connection channel
+        self.channel = self.gw.remote_exec(client_code)
+
+        # Arguments for cubit
+        if cubit_args is None:
+            arguments = [
+                "cubit",
+                # "-log",  # Write the log to a file
+                # "dev/null",
+                "-information",  # Do not output information of cubit
+                "Off",
+                "-nojournal",  # Do write a journal file
+                "-noecho",  # Do not output commands used in cubit
+            ]
+        else:
+            arguments = ["cubit"] + cubit_args
+
+        # Parameters for initialization of the client interpreter.
+        parameters = {
+            "additional_sys_paths": [str(cubit_lib)],
+            "is_remote": cupy.is_remote(),
+        }
+
+        # In remote mode, configure the remote Python environment and send the client code
+        if cupy.is_remote():
+            self.log_check = False
 
         # Local mode – run cubit on the local machine
         else:
-            if interpreter is None:
-                interpreter = f"popen//python={cupy.get_cubit_interpreter()}"
-
-            if cubit_lib is None:
-                cubit_lib = cupy.get_cubit_lib_path()
-
-            # Set up the client python interpreter
-            self.gw = execnet.makegateway(interpreter)
-            self.gw.reconfigure(py3str_as_py2str=True)
-
-            # Load the main code in the client python interpreter
-            client_python_file = os.path.join(
-                os.path.dirname(__file__), "cubit_wrapper_client.py"
-            )
-            with open(client_python_file, "r") as myfile:
-                data = myfile.read()
-
-            # Set up the connection channel
-            self.channel = self.gw.remote_exec(data)
-
-            # Send parameters to the client interpreter
-            parameters = {}
-            parameters["__file__"] = __file__
-            parameters["cubit_lib_path"] = cubit_lib
-
-            # Arguments for cubit
-            if cubit_args is None:
-                arguments = [
-                    "cubit",
-                    # "-log",  # Write the log to a file
-                    # "dev/null",
-                    "-information",  # Do not output information of cubit
-                    "Off",
-                    "-nojournal",  # Do write a journal file
-                    "-noecho",  # Do not output commands used in cubit
-                ]
-            else:
-                arguments = ["cubit"] + cubit_args
-
             # Check if a log file was given in the cubit arguments
             for arg in arguments:
                 if arg.startswith("-log="):
@@ -125,12 +120,17 @@ class CubitConnect(object):
                 parameters["tty"] = cupy.temp_log
                 self.log_check = True
 
-            # Send the parameters to the client interpreter
-            self.send_and_return(parameters)
+        # Send the parameters to the client interpreter
+        self.send_and_return(parameters)
 
-            # Initialize cubit in the client and create the linking object here
-            cubit_id = self.send_and_return(["init", arguments])
-            self.cubit = CubitObjectMain(self, cubit_id)
+        # Initialize cubit in the client and create the linking object here
+        cubit_id = self.send_and_return(["init", arguments])
+        if cubit_id is None:
+            raise RuntimeError(
+                "Could not initialize cubit in the client! "
+                "Likely due to a missing license."
+            )
+        self.cubit = CubitObjectMain(self, cubit_id)
 
         def cleanup_execnet_gateway():
             """We need to register a function called at interpreter shutdown
@@ -156,7 +156,10 @@ class CubitConnect(object):
         try:
             self.channel.send(argument_list)
             return self.channel.receive()
-        except:
+        except execnet.gateway_base.RemoteError:
+            # We still raise errors reported from the client.
+            raise
+        except Exception:
             return None
 
     def get_attribute(self, cubit_object, name):
@@ -256,17 +259,16 @@ class CubitObject(object):
     client.
     """
 
-    def __init__(self, cubit_connect, cubit_data_list):
+    def __init__(self, cubit_connect: CubitConnect, cubit_data_list: list):
         """Initialize the object.
 
-        Args
-        ----
-        cubit_connect: CubitConnect
-            A link to the cubit_connect object that will be used to call
-            methods.
-        cubit_data_list: []
-            A list of strings that contains info about the cubit object.
-            The first item is the id of this object in th client.
+        Args:
+            cubit_connect:
+                A link to the cubit_connect object that will be used to call
+                methods.
+            cubit_data_list:
+                A list of strings that contains info about the cubit object.
+                The first item is the id of this object in th client.
         """
 
         # Check formatting of cubit_id
