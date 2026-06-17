@@ -1606,13 +1606,32 @@ def test_display_in_cubit():
     Compare that the created journal file is correct.
     """
 
-    # Create brick.
     cubit = CubitPy()
     create_brick(cubit, 1, 1, 1, mesh_interval=[2, 2, 2])
 
-    # Check the journal file which is created in the display_in_cubit
-    # function.
-    journal_path = cubit.display_in_cubit(
+    # Check the command for opening cubit in the display_in_cubit function.
+    assert cubit._get_display_in_cubit_command("coreform.exe", "journal.jou") == [
+        "coreform.exe",
+        "-nojournal",
+        "-information",
+        "Off",
+        "-input",
+        "journal.jou",
+    ]
+    assert cubit._get_display_in_cubit_command(
+        "coreform.exe", "journal.jou", add_quotes=True
+    ) == [
+        '"coreform.exe"',
+        "-nojournal",
+        "-information",
+        "Off",
+        "-input",
+        '"journal.jou"',
+    ]
+
+    # Check the journal file which is created in the display_in_cubit function.
+    assert cubit._get_display_in_cubit_journal_text(
+        state_path="state.cub5",
         labels=[
             cupy.geometry.vertex,
             cupy.geometry.curve,
@@ -1625,29 +1644,22 @@ def test_display_in_cubit():
             cupy.finite_element_object.hex,
             cupy.finite_element_object.tet,
         ],
-        testing=True,
+    ) == "\n".join(
+        [
+            'open "state.cub5"',
+            "label volume On",
+            "label surface On",
+            "label curve On",
+            "label vertex On",
+            "label hex On",
+            "label tet On",
+            "label face On",
+            "label tri On",
+            "label edge On",
+            "label node On",
+            "display",
+        ]
     )
-    with open(journal_path, "r") as journal:
-        journal_text = journal.read()
-    if cupy.is_coreform():
-        state_name = "state.cub5"
-    else:
-        state_name = "state.cub"
-    ref_text = (
-        f'open "{cupy.temp_dir}/{state_name}"\n'
-        "label volume On\n"
-        "label surface On\n"
-        "label curve On\n"
-        "label vertex On\n"
-        "label hex On\n"
-        "label tet On\n"
-        "label face On\n"
-        "label tri On\n"
-        "label edge On\n"
-        "label node On\n"
-        "display"
-    )
-    assert journal_text.strip() == ref_text.strip()
 
 
 def test_create_parametric_surface():
