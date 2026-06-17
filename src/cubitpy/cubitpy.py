@@ -26,7 +26,7 @@ import subprocess  # nosec B404
 import time
 import warnings
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from fourcipp.fourc_input import FourCInput
 
@@ -38,6 +38,7 @@ from cubitpy.cubit_to_fourc_input import (
     get_input_file_with_mesh,
 )
 from cubitpy.cubit_utility import node_set_info_to_string
+from cubitpy.cubit_wrapper.cubit_wrapper_file_transfer import transfer_file_from_remote
 from cubitpy.cubit_wrapper.cubit_wrapper_host import CubitConnect
 
 
@@ -92,14 +93,6 @@ class CubitPy(object):
 
         # Set the "real" cubit object
         self.cubit = CubitConnect(**kwargs).cubit
-
-        # Set remote paths
-        if cupy.is_remote():
-            raise NotImplementedError(
-                "Remote cubit connections are not yet supported in CubitPy."
-            )
-        else:
-            self.cubit_exe = cupy.get_cubit_exe_path()
 
         # Reset cubit
         self.cubit.cmd("reset")
@@ -370,12 +363,25 @@ class CubitPy(object):
             raise TypeError("Expected line, got {}".format(type(item)))
         self.cubit.cmd("curve {} interval {} scheme equal".format(item.id(), n_el))
 
-    def export_cub(self, path):
+    def _export_cub(self, path):
         """Export the cubit input."""
         if cupy.is_coreform():
             self.cubit.cmd(f'save cub5 "{path}" overwrite journal')
         else:
             self.cubit.cmd('save as "{}" overwrite'.format(path))
+
+    def _get_cubit_local_temp_dir(self) -> Path | PureWindowsPath:
+        """Get the temporary directory that is accessible by Cubit."""
+        temp_dir: Path | PureWindowsPath
+        if cupy.is_remote():
+            temp_dir_string = self.cubit.cubit_connect.send_and_return(["get_temp_dir"])
+            if cupy.get_remote_platform() == "windows":
+                temp_dir = PureWindowsPath(temp_dir_string)
+            else:
+                temp_dir = Path(temp_dir_string)
+        else:
+            temp_dir = Path(cupy.temp_dir)
+        return temp_dir
 
     def export_exo(self, path: Path, *, add_node_set_info: bool = True) -> None:
         """Export the mesh.
@@ -419,7 +425,15 @@ class CubitPy(object):
                     name_from_cubit = f"Nodeset {node_set_id}"
                 rename_mapping[node_set_id] = name_from_cubit
 
-        self.cubit.cmd('export mesh "{}" dimension 3 overwrite'.format(path))
+        if cupy.is_remote():
+            path_for_cubit = self._get_cubit_local_temp_dir() / "cubitpy.exo"
+        else:
+            path_for_cubit = path
+
+        self.cubit.cmd('export mesh "{}" dimension 3 overwrite'.format(path_for_cubit))
+
+        if cupy.is_remote():
+            transfer_file_from_remote(path_for_cubit, path)
 
         if add_node_set_info:
             for node_set_id in self.node_sets.keys():
@@ -583,6 +597,71 @@ class CubitPy(object):
 
         return create_objects
 
+    @staticmethod
+    def _get_display_in_cubit_journal_text(state_path: Path, labels: list) -> str:
+        """Create the journal text for displaying the CubitPy state in
+        Cubit."""
+
+        # First, we need to open the state file.
+        journal_lines = [f'open "{state_path}"']
+
+        # Get the cubit names of the desired display items.
+        cubit_names = [label.get_cubit_string() for label in labels]
+
+        # Label items in cubit, per default all labels are deactivated.
+        cubit_labels = [
+            "volume",
+            "surface",
+            "curve",
+            "vertex",
+            "hex",
+            "tet",
+            "face",
+            "tri",
+            "edge",
+            "node",
+        ]
+        for item in cubit_labels:
+            if item in cubit_names:
+                on_off = "On"
+            else:
+                on_off = "Off"
+            journal_lines.append(f"label {item} {on_off}")
+        journal_lines.append("display")
+        return "\n".join(journal_lines)
+
+    @staticmethod
+    def _get_display_in_cubit_command(
+        cubit_exe: Path, journal_path: Path, add_quotes: bool = False
+    ) -> list:
+        """Create the command for opening Cubit with the journal file.
+
+        Args:
+            cubit_exe: Path to the Cubit executable.
+            journal_path: Path to the journal file that opens the state in Cubit.
+            add_quotes: Whether to add quotes around the paths in the command.
+
+        Returns:
+            A list of the command and its arguments for opening Cubit with the journal file.
+        """
+
+        def _path_to_str(path: Path) -> str:
+            """Helper function that optionally adds quotes to the path
+            string."""
+            s = str(path)
+            if add_quotes:
+                s = '"' + s + '"'
+            return s
+
+        return [
+            _path_to_str(cubit_exe),
+            "-nojournal",
+            "-information",
+            "Off",
+            "-input",
+            _path_to_str(journal_path),
+        ]
+
     def display_in_cubit(self, labels=[], delay=0.5, testing=False):
         """Save the state to a cubit file and open cubit with that file.
         Additionally labels can be displayed in cubit to simplify the mesh
@@ -610,58 +689,57 @@ class CubitPy(object):
         # fully written to disk).
         # TODO: find a way to do this without the wait command, but to check if
         # the file is readable.
-        os.makedirs(cupy.temp_dir, exist_ok=True)
         if cupy.is_coreform():
-            state_path = os.path.join(cupy.temp_dir, "state.cub5")
+            extension = "cub5"
         else:
-            state_path = os.path.join(cupy.temp_dir, "state.cub")
-        self.export_cub(state_path)
+            extension = "cub"
+        if cupy.is_remote():
+            temp_path = self._get_cubit_local_temp_dir()
+        else:
+            os.makedirs(cupy.temp_dir, exist_ok=True)
+            temp_path = Path(cupy.temp_dir)
+        state_path = temp_path / ("state" + "." + extension)
+        self._export_cub(state_path)
         time.sleep(delay)
 
-        # Write file that opens the state in cubit.
-        journal_path = os.path.join(cupy.temp_dir, "open_state.jou")
-        with open(journal_path, "w") as journal:
-            journal.write('open "{}"\n'.format(state_path))
+        # Get path and content of the journal file that opens the state in cubit.
+        journal_path = temp_path / "open_state.jou"
+        journal_text = self._get_display_in_cubit_journal_text(state_path, labels)
 
-            # Get the cubit names of the desired display items.
-            cubit_names = [label.get_cubit_string() for label in labels]
+        if cupy.is_remote():
+            # If Cubit is running remotely, we need to open the Cubit GUI in the remote session.
 
-            # Label items in cubit, per default all labels are deactivated.
-            cubit_labels = [
-                "volume",
-                "surface",
-                "curve",
-                "vertex",
-                "hex",
-                "tet",
-                "face",
-                "tri",
-                "edge",
-                "node",
-            ]
-            for item in cubit_labels:
-                if item in cubit_names:
-                    on_off = "On"
-                else:
-                    on_off = "Off"
-                journal.write("label {} {}\n".format(item, on_off))
-            journal.write("display\n")
-
-        # Get the command and arguments to open cubit with.
-        cubit_command = [
-            self.cubit_exe,
-            "-nojournal",
-            "-information",
-            "Off",
-            "-input",
-            "open_state.jou",
-        ]
-
-        if not testing:
-            # Open the state in cubit.
-            subprocess.call(
-                cubit_command,  # nosec B603
-                cwd=cupy.temp_dir,
+            # Since this command will be executed as a string on the remote machine, we
+            # need to add quotes around the paths to ensure that they are correctly
+            # parsed, especially if they contain spaces.
+            cubit_command = self._get_display_in_cubit_command(
+                cupy.get_cubit_exe_path(), journal_path, add_quotes=True
+            )
+            self.cubit.cubit_connect.send_and_return(
+                [
+                    "display_in_cubit",
+                    {
+                        "cubit_command": " ".join(cubit_command),
+                        "journal_path": str(journal_path),
+                        "journal_text": journal_text,
+                    },
+                ]
             )
         else:
-            return journal_path
+            # Write file that opens the state in cubit.
+            with open(journal_path, "w") as journal:
+                journal.write(journal_text)
+
+            # Get the command and arguments to open cubit with.
+            cubit_command = self._get_display_in_cubit_command(
+                cupy.get_cubit_exe_path(), journal_path
+            )
+
+            if not testing:
+                # Open the state in cubit.
+                subprocess.call(
+                    cubit_command,  # nosec B603
+                    cwd=cupy.temp_dir,
+                )
+            else:
+                return journal_path

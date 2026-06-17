@@ -62,9 +62,21 @@ If you intend to actively develop `cubitpy`, install it in *editable mode*
 pip install -e ".[dev]"
 ```
 
-To run CubitPy it is required to set an environment variable with the path to the Cubit directory. This should be the "root" directory for the installation.
+To run CubitPy it is required to provide a CubitPy configuration file.
+This file should look like:
+```yaml
+cubitpy_mode: "local"  # "local" or "remote"
+local_config:
+  cubit_path: "/Users/ivosteinbrecher/opt/Cubit-15.2/Cubit.app"
+remote_config:
+  user: "username"
+  host: "hostname"
+  platform: "windows"
+  cubit_path: "C:\\Coreform_Cubit_2025.8"
+```
+To run CubitPy one can either provide the configuration file then initializing CubitPy, or set an environment variable with the path to the configuration file.
 ```bash
-export CUBIT_ROOT=path_to_cubit_root_directory
+export CUBITPY_CONFIG_PATH=path_to_cubitpy_config.yaml
 ```
 
 If you are using a Cubit version that still runs on python2, you need to specify a path to a valid python2.7 executable
