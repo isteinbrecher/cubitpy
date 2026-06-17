@@ -24,12 +24,13 @@ interpreter and the main python interpreter."""
 
 import atexit
 import os
+import warnings
 from pathlib import Path
 
 import execnet
 import numpy as np
 
-from cubitpy.conf import GeometryType, cupy
+from cubitpy.conf import CubitPyWarning, GeometryType, cupy
 from cubitpy.cubit_wrapper.cubit_wrapper_utility import cubit_item_to_id, is_base_type
 
 
@@ -151,16 +152,35 @@ class CubitConnect(object):
             arguments stored in the second entry in argument_list.
         """
 
-        # If the channel is already finalized we get a runtime error here. This happens in cases
-        # where we delete items after the connection has been closed. We catch this error here.
+        def get_log_string(log_lines: list[str], name: str) -> str:
+            """Get a string from the log lines."""
+            text = f"The command\n    {argument_list}\nraised the following {name}:"
+            return "\n".join([text] + log_lines)
+
         try:
             self.channel.send(argument_list)
-            return self.channel.receive()
-        except execnet.gateway_base.RemoteError:
-            # We still raise errors reported from the client.
+            return_value = self.channel.receive()
+            if isinstance(return_value, dict):
+                if len(return_value["messages"]) > 0:
+                    warnings.warn(
+                        get_log_string(return_value["messages"], "message(s)"),
+                        category=CubitPyWarning,
+                        stacklevel=3,
+                    )
+                if len(return_value["errors"]) > 0:
+                    raise RuntimeError(
+                        get_log_string(return_value["errors"], "error(s)")
+                    )
+                return return_value["return_value"]
+            else:
+                return return_value
+        except OSError as e:
+            if "cannot send" in str(e):
+                # If the channel is already finalized we get this error here. This
+                # happens in cases where we delete items after the connection has been
+                # closed.
+                return None
             raise
-        except Exception:
-            return None
 
     def get_attribute(self, cubit_object, name):
         """Return the attribute 'name' of cubit_object. If the attribute is

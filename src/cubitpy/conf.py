@@ -41,6 +41,10 @@ from cubitpy.cubitpy_types import (
 )
 
 
+class CubitPyWarning(UserWarning):
+    """Warning emitted by CubitPy."""
+
+
 def get_path(environment_variable, test_function, *, throw_error=True):
     """Check if he environment variable is set and the path exits."""
     if environment_variable in os.environ.keys():
