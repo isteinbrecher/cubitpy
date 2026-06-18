@@ -67,7 +67,7 @@ This file should look like:
 ```yaml
 cubitpy_mode: "local"  # "local" or "remote"
 local_config:
-  cubit_path: "/Users/ivosteinbrecher/opt/Cubit-15.2/Cubit.app"
+  cubit_path: "/Users/username/opt/Cubit-15.2/Cubit.app"
 remote_config:
   user: "username"
   host: "hostname"
