@@ -999,7 +999,7 @@ def test_contact_condition_surface_to_surface():
     cubit.add_node_set(
         solid.surfaces()[0],
         name="block1_contact_side",
-        bc_type=cupy.bc_type.solid_to_solid_surface_contact,
+        bc_type=cupy.bc_type.solid_to_solid_contact,
         bc_description={"InterfaceID": 0, "Side": "Master"},
     )
     cubit.add_node_set(
