@@ -33,14 +33,7 @@ from deepdiff import DeepDiff
 from fourcipp.fourc_input import FourCInput
 from fourcipp.utils.dict_utils import compare_nested_dicts_or_lists
 
-# Define the testing paths.
-testing_path = os.path.abspath(os.path.dirname(__file__))
-testing_input = os.path.join(testing_path, "input-files-ref")
-testing_temp = os.path.join(testing_path, "testing-tmp")
-testing_external_geometry = os.path.join(testing_path, "external-geometry")
-
-# CubitPy imports.
-from cubitpy.conf import cupy
+from cubitpy.conf import CubitPyWarning, cupy
 from cubitpy.cubit_utility import (
     formatter,
     get_surface_center,
@@ -55,6 +48,13 @@ from cubitpy.geometry_creation_functions import (
     create_spline_interpolation_curve,
 )
 from cubitpy.mesh_creation_functions import create_brick, extrude_mesh_normal_to_surface
+
+# Define the testing paths.
+testing_path = os.path.abspath(os.path.dirname(__file__))
+testing_input = os.path.join(testing_path, "input-files-ref")
+testing_temp = os.path.join(testing_path, "testing-tmp")
+testing_external_geometry = os.path.join(testing_path, "external-geometry")
+
 
 # Global variable if this test is run by GitLab.
 if "TESTING_GITHUB" in os.environ.keys() and os.environ["TESTING_GITHUB"] == "1":
@@ -2485,3 +2485,21 @@ def test_node_set_info_to_string_errors():
         match="Expected string to start with",
     ):
         string_to_node_set_info("abc")
+
+
+def test_cubit_warnings_and_errors():
+    """Test that cubit warnings and errors are handled correctly."""
+
+    cubit = CubitPy()
+
+    # Warning
+    cubit.cmd("brick x 10")
+    with pytest.warns(CubitPyWarning, match="is a CUBIT identifier. Please use the"):
+        cubit.cmd('volume 1 rename "b"')
+
+    # Error
+    with pytest.raises(
+        RuntimeError,
+        match="ERROR: All dimensions must be nonzero and positive. Entered values are:",
+    ):
+        cubit.cmd("brick x -10")

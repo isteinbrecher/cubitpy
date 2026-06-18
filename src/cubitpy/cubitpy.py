@@ -30,7 +30,7 @@ from pathlib import Path, PureWindowsPath
 
 from fourcipp.fourc_input import FourCInput
 
-from cubitpy.conf import GeometryType, cupy
+from cubitpy.conf import CubitPyWarning, GeometryType, cupy
 from cubitpy.cubit_group import CubitGroup
 from cubitpy.cubit_to_fourc_input import (
     add_exodus_geometry_section,
@@ -146,7 +146,9 @@ class CubitPy(object):
             warnings.warn(
                 'A {} is added for the group "{}" and an explicit name of "{}" is given. This might be unintended, as usually if a group is given, we expect to use the name of the group. In the current case we will use the given name.'.format(
                     set_type, item.name, name
-                )
+                ),
+                category=CubitPyWarning,
+                stacklevel=3,
             )
             rename_name = name
         elif group_name is not None:

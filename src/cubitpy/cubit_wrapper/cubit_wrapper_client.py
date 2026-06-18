@@ -83,6 +83,34 @@ def is_cubit_type(obj):
         return False
 
 
+class DefaultMessageHandler:
+    """This class is a dummy class that can be overwritten later on to
+    intercept messages and errors from Cubit."""
+
+    def pop(self):
+        """Return two empty lists for messages and errors."""
+        return [], []
+
+
+message_handler = DefaultMessageHandler()
+
+
+def channel_send(argument):
+    """Wrapper for all send calls to the host interpreter.
+
+    This wrapper appends information about messages and errors from
+    Cubit.
+    """
+    messages, errors = message_handler.pop()
+    channel.send(
+        {
+            "return_value": argument,
+            "messages": messages,
+            "errors": errors,
+        }
+    )
+
+
 # All cubit items that are created are stored in this dictionary. The keys are
 # the unique object ids. The items are deleted once they run out of scope in
 # the host interpreter.
@@ -91,7 +119,7 @@ cubit_objects = {}
 
 # The first call are parameters needed in this script
 parameters = channel.receive()
-channel.send(None)
+channel_send(None)
 if not isinstance(parameters, dict):
     raise TypeError(
         "The first item should be a dictionary. Got {}!\nparameters={}".format(
@@ -115,7 +143,7 @@ if not len(init) == 2:
     raise ValueError("Two arguments must be given to init!")
 cubit.init(init[1])
 cubit_objects[id(cubit)] = cubit
-channel.send(object_to_id(cubit))
+channel_send(object_to_id(cubit))
 
 
 if parameters["is_remote"]:
@@ -126,6 +154,42 @@ if parameters["is_remote"]:
 
     # On remote systems, create a temporary directory.
     temp_dir = tempfile.TemporaryDirectory(prefix="cubitpy_temp_dir")
+
+
+# Try to add a custom message handler to Cubit
+try:
+
+    class MessageHandler(cubit.CubitMessageHandler):
+        """This class intercepts messages and errors from Cubit."""
+
+        def setup(self):
+            """Initialize the variables that track the messages and errors."""
+            self.messages = []
+            self.errors = []
+
+        def pop(self):
+            """Return the stored messages and errors and reset the
+            variables."""
+            return_value = [self.messages, self.errors]
+            self.setup()
+            return return_value
+
+        def print_message(self, message):
+            """Append the message to the list of messages."""
+            self.messages.append(message)
+
+        def print_error(self, message):
+            """Append the error to the list of errors."""
+            self.errors.append(message)
+
+    message_handler_cubit = MessageHandler()
+    message_handler_cubit.setup()
+    cubit.set_cubit_message_handler(message_handler_cubit)
+
+    # Everything worked, so overwrite the message handler with the one linked to Cubit.
+    message_handler = message_handler_cubit
+except Exception:
+    pass  # nosec B110
 
 
 # Now start an endless loop (until None is sent) and perform the cubit functions
@@ -181,7 +245,7 @@ while 1:
         # Check what to return
         if is_base_type(cubit_return):
             # The return item is a string, integer or float
-            channel.send(cubit_return)
+            channel_send(cubit_return)
 
         elif isinstance(cubit_return, tuple):
             # A tuple was returned, loop over each entry and check its type
@@ -198,12 +262,12 @@ while 1:
                             item
                         )
                     )
-            channel.send(return_list)
+            channel_send(return_list)
 
         elif is_cubit_type(cubit_return):
             # Store the object locally and return the id
             cubit_objects[id(cubit_return)] = cubit_return
-            channel.send(object_to_id(cubit_return))
+            channel_send(object_to_id(cubit_return))
 
         else:
             raise TypeError(
@@ -214,28 +278,28 @@ while 1:
 
     elif receive[0] == "iscallable":
         cubit_object = cubit_objects[cubit_item_to_id(receive[1])]
-        channel.send(callable(getattr(cubit_object, receive[2])))
+        channel_send(callable(getattr(cubit_object, receive[2])))
 
     elif receive[0] == "get_object_type":
         # Get the type of the cubit object
         compare_object = cubit_objects[cubit_item_to_id(receive[1])]
         if isinstance(compare_object, cubit.Vertex):
-            channel.send(cubit_vertex)
+            channel_send(cubit_vertex)
         elif isinstance(compare_object, cubit.Curve):
-            channel.send(cubit_curve)
+            channel_send(cubit_curve)
         elif isinstance(compare_object, cubit.Surface):
-            channel.send(cubit_surface)
+            channel_send(cubit_surface)
         elif isinstance(compare_object, cubit.Volume):
-            channel.send(cubit_volume)
+            channel_send(cubit_volume)
         elif isinstance(compare_object, cubit.Body):
-            channel.send(cubit_body)
+            channel_send(cubit_body)
         else:
-            channel.send(None)
+            channel_send(None)
 
     elif receive[0] == "get_self_dir":
         # Return a list with all callable methods of this object
         cubit_object = cubit_objects[cubit_item_to_id(receive[1])]
-        channel.send(
+        channel_send(
             [
                 [method_name, callable(getattr(cubit_object, method_name))]
                 for method_name in dir(cubit_object)
@@ -257,10 +321,10 @@ while 1:
             )
 
         # Return to python host
-        channel.send(None)
+        channel_send(None)
 
     elif receive[0] == "get_temp_dir":
-        channel.send(temp_dir.name)
+        channel_send(temp_dir.name)
 
     elif receive[0] == "display_in_cubit":
         # receive = ["display_in_cubit", parameters]
@@ -332,7 +396,7 @@ while 1:
                 break
 
             time.sleep(2)
-        channel.send(None)
+        channel_send(None)
 
     else:
         raise ValueError('The case of "{}" is not implemented!'.format(receive[0]))
