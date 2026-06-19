@@ -38,6 +38,7 @@ Note: The contents of `cubit_wrapper_utility.py` will be added to the start
 
 import os
 import sys
+import tempfile
 
 # Cubit constants
 cubit_vertex = "cubitpy_vertex"
@@ -49,23 +50,6 @@ cubit_body = "cubitpy_body"
 
 # Default parameters
 parameters = {}
-
-
-def out(string):
-    """The print version does over different interpreters, so this function
-    prints strings to an active console.
-
-    Insert the path of your console to get the
-    right output.
-    To get the current path of your console type: tty
-    """
-
-    if "tty" in parameters.keys():
-        out_console = parameters["tty"]
-    else:
-        out_console = "/dev/pts/18"
-    escaped_string = "{}".format(string).replace('"', '\\"')
-    os.system('echo "{}" > {}'.format(escaped_string, out_console))  # nosec
 
 
 def is_cubit_type(obj):
@@ -117,9 +101,8 @@ def channel_send(argument):
 cubit_objects = {}
 
 
-# The first call are parameters needed in this script
+# The first call are parameters needed in this script and to initialize cubit.
 parameters = channel.receive()
-channel_send(None)
 if not isinstance(parameters, dict):
     raise TypeError(
         "The first item should be a dictionary. Got {}!\nparameters={}".format(
@@ -132,32 +115,73 @@ for path in parameters["additional_sys_paths"]:
     if path not in sys.path:
         sys.path.append(path)
 
+# Import libraries needed if this script is running on a remote system.
+# Also, create a temporary directory that is accessible by Cubit.
+if parameters["is_remote"]:
+    import platform
+    import subprocess  # nosec B404
+    import time
+
+    temp_dir = tempfile.TemporaryDirectory(prefix="cubitpy_temp_dir")
+
+
+if sys.version_info[0] < 3:
+    # On non-Coreform Cubit versions (running on python2), we check the log file to get the
+    # messages and errors from Cubit. This can be removed once support for python2 is
+    # dropped, as the message handler is the cleaner solution.
+    _temp_dir = "/tmp/cubitpy_temp_log"  # nosec
+    if not os.path.exists(_temp_dir):
+        os.makedirs(_temp_dir)
+    temp_log = os.path.join(_temp_dir, "cubitpy.log")
+    open(temp_log, "w").close()
+    parameters["init_arguments"].extend(["-log", temp_log])
+
+
+# Import and initialize the cubit python module
 import cubit
 
-# The second call is the initialization call for cubit
-# init = ['init', cubit_path, [args]]
-init = channel.receive()
-if not init[0] == "init":
-    raise ValueError("The second call must be init!")
-if not len(init) == 2:
-    raise ValueError("Two arguments must be given to init!")
-cubit.init(init[1])
+cubit.init(parameters["init_arguments"])
 cubit_objects[id(cubit)] = cubit
 channel_send(object_to_id(cubit))
 
 
-if parameters["is_remote"]:
-    import platform
-    import subprocess  # nosec B404
-    import tempfile
-    import time
+# Add a custom message handler to Cubit
+if sys.version_info[0] < 3:
 
-    # On remote systems, create a temporary directory.
-    temp_dir = tempfile.TemporaryDirectory(prefix="cubitpy_temp_dir")
+    class MessageHandler:
+        """This class intercepts messages and errors from Cubit.
 
+        This is done by checking the log file, which is not ideal but
+        the only option for non-Coreform Cubit versions running on
+        python2.
+        """
 
-# Try to add a custom message handler to Cubit
-try:
+        def __init__(self):
+            self.setup()
+
+        def setup(self):
+            """Check if the log file is empty, if it is not, empty it."""
+            if os.stat(temp_log).st_size != 0:
+                with open(temp_log, "w"):
+                    pass
+
+        def pop(self):
+            """Return the stored log messages."""
+
+            with open(temp_log, "r") as log_file:
+                log_text = log_file.read().strip()
+
+            if log_text == "":
+                return_value = [[], []]
+            else:
+                # On old cubit versions, we send all messages as warnings, as they are
+                # not directly related to the messages on newer cubit versions.
+                return_value = [[log_text], []]
+            self.setup()
+            return return_value
+
+    message_handler = MessageHandler()
+else:
 
     class MessageHandler(cubit.CubitMessageHandler):
         """This class intercepts messages and errors from Cubit."""
@@ -182,14 +206,9 @@ try:
             """Append the error to the list of errors."""
             self.errors.append(message)
 
-    message_handler_cubit = MessageHandler()
-    message_handler_cubit.setup()
-    cubit.set_cubit_message_handler(message_handler_cubit)
-
-    # Everything worked, so overwrite the message handler with the one linked to Cubit.
-    message_handler = message_handler_cubit
-except Exception:
-    pass  # nosec B110
+    message_handler = MessageHandler()
+    message_handler.setup()
+    cubit.set_cubit_message_handler(message_handler)
 
 
 # Now start an endless loop (until None is sent) and perform the cubit functions
