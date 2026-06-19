@@ -23,7 +23,6 @@
 interpreter and the main python interpreter."""
 
 import atexit
-import os
 import warnings
 from pathlib import Path
 
@@ -42,18 +41,9 @@ class CubitConnect(object):
     receive the output.
     """
 
-    def __init__(self, *, cubit_args=None):
+    def __init__(self):
         """Initialize the connection between the client (cubit) python
-        interpreter and this one. Also load the cubit module in the remote
-        interpreter.
-
-        Args
-        ----
-        cubit_args: [str]
-            List of arguments to pass to cubit.init
-        interpreter: str
-            Python interpreter to be used for running cubit.
-        """
+        interpreter and this one."""
 
         # Set up the gateway to the client python interpreter
         if cupy.is_remote():
@@ -80,52 +70,23 @@ class CubitConnect(object):
         self.channel = self.gw.remote_exec(client_code)
 
         # Arguments for cubit
-        if cubit_args is None:
-            arguments = [
-                "cubit",
-                # "-log",  # Write the log to a file
-                # "dev/null",
-                "-information",  # Do not output information of cubit
-                "Off",
-                "-nojournal",  # Do write a journal file
-                "-noecho",  # Do not output commands used in cubit
-            ]
-        else:
-            arguments = ["cubit"] + cubit_args
+        init_arguments = [
+            "cubit",
+            "-information",  # Do not output information of cubit
+            "Off",
+            "-nojournal",  # Do write a journal file
+            "-noecho",  # Do not output commands used in cubit
+        ]
 
         # Parameters for initialization of the client interpreter.
         parameters = {
             "additional_sys_paths": [str(cubit_lib)],
             "is_remote": cupy.is_remote(),
+            "init_arguments": init_arguments,
         }
 
-        # In remote mode, configure the remote Python environment and send the client code
-        if cupy.is_remote():
-            self.log_check = False
-
-        # Local mode – run cubit on the local machine
-        else:
-            # Check if a log file was given in the cubit arguments
-            for arg in arguments:
-                if arg.startswith("-log="):
-                    log_given = True
-                    break
-            else:
-                log_given = False
-
-            self.log_check = False
-
-            if not log_given:
-                # Write the log to a temporary file and check the contents after each call to cubit
-                arguments.extend(["-log", cupy.temp_log])
-                parameters["tty"] = cupy.temp_log
-                self.log_check = True
-
-        # Send the parameters to the client interpreter
-        self.send_and_return(parameters)
-
         # Initialize cubit in the client and create the linking object here
-        cubit_id = self.send_and_return(["init", arguments])
+        cubit_id = self.send_and_return(parameters)
         if cubit_id is None:
             raise RuntimeError(
                 "Could not initialize cubit in the client! "
@@ -219,12 +180,6 @@ class CubitConnect(object):
                 else:
                     return item
 
-            if self.log_check:
-                # Check if the log file is empty. If it is not, empty it.
-                if os.stat(cupy.temp_log).st_size != 0:
-                    with open(cupy.temp_log, "w"):
-                        pass
-
             # Check if there are cubit objects in the arguments
             arguments = serialize_item(args)
 
@@ -232,11 +187,6 @@ class CubitConnect(object):
             cubit_return = self.send_and_return(
                 [cubit_object.cubit_id, name, arguments]
             )
-
-            if self.log_check:
-                # Print the content of the log file
-                with open(cupy.temp_log, "r") as log_file:
-                    print(log_file.read(), end="")
 
             # Check if the return value is a cubit object
             if cubit_item_to_id(cubit_return) is not None:

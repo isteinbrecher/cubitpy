@@ -84,7 +84,6 @@ class CubitOptions(object):
             "/tmp/cubitpy_{}".format(getpass.getuser()),  # nosec
             "pid_{}".format(os.getpid()),
         )
-        self.temp_log = os.path.join(self.temp_dir, "cubitpy.log")
 
         # Check if temp path exits, if not create it.
         os.makedirs(self.temp_dir, exist_ok=True)
