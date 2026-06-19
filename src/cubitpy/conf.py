@@ -74,6 +74,8 @@ class CubitOptions(object):
             self._host_platform = "linux"
         elif self._host_platform.startswith("darwin"):
             self._host_platform = "macos"
+        elif self._host_platform.startswith("win32"):
+            self._host_platform = "windows"
         else:
             raise ValueError(
                 "Got unexpected host platform: {}".format(self._host_platform)
