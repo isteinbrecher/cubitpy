@@ -305,15 +305,23 @@ class CubitOptions(object):
             if self.is_coreform():
                 python_files = [
                     path
-                    for executable in ("python3", "python")
-                    for path in cubit_path.rglob(executable)
+                    for path in cubit_path.rglob("python3*")
                     if path.is_file()
+                    and (  # Check if the file is named "python3" or "python3.x" where x is a version number
+                        path.name == "python3"
+                        or (
+                            path.name.startswith("python3.")
+                            and path.name.removeprefix("python3.")
+                            .replace(".", "")
+                            .isdigit()
+                        )
+                    )
                 ]
                 if len(python_files) != 1:
                     raise ValueError(
                         "Could not uniquely determine the path to the Cubit Python "
-                        f"interpreter. Expected exactly one 'python3' or 'python' "
-                        f"executable under '{cubit_path}', but found "
+                        f"interpreter. Expected exactly one 'python3' or versioned "
+                        f"'python3.x' executable under '{cubit_path}', but found "
                         f"{len(python_files)}: {python_files}"
                     )
                 return str(python_files[0])
