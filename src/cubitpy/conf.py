@@ -23,7 +23,6 @@
 cubitpy."""
 
 import getpass
-import glob
 import os
 import shutil
 import sys
@@ -304,18 +303,20 @@ class CubitOptions(object):
 
         if cubit_platform == "linux" or cubit_platform == "macos":
             if self.is_coreform():
-                pattern = "**/python3"
-                full_pattern = os.path.join(cubit_path, pattern)
-                python3_matches = glob.glob(full_pattern, recursive=True)
-                python3_files = [
-                    path for path in python3_matches if os.path.isfile(path)
+                python_files = [
+                    path
+                    for executable in ("python3", "python")
+                    for path in cubit_path.rglob(executable)
+                    if path.is_file()
                 ]
-                if not len(python3_files) == 1:
+                if len(python_files) != 1:
                     raise ValueError(
-                        "Could not find the path to the cubit python interpreter"
+                        "Could not uniquely determine the path to the Cubit Python "
+                        f"interpreter. Expected exactly one 'python3' or 'python' "
+                        f"executable under '{cubit_path}', but found "
+                        f"{len(python_files)}: {python_files}"
                     )
-                cubit_python_interpreter = python3_files[0]
-                return cubit_python_interpreter
+                return str(python_files[0])
             else:
                 python2_path_env = get_path(
                     "CUBITPY_PYTHON2", os.path.isfile, throw_error=False
